@@ -1,37 +1,45 @@
 pipeline {
-    agent any
+  agent any  // or agent { docker { image 'node:14-alpine' } }
 
-    stages {
-        stage('Build Docker Image') {
-            steps {
-                script {
-                    // Define variable properly with 'def'
-                    def dockerImage = docker.build("my-app:8")
-                }
-            }
-        }
+  environment {
+    DOCKERHUB_CREDENTIALS = credentials('dockerhub-creds')  // Store credentials in Jenkins
+  }
 
-        stage('Test') {
-            steps {
-                script {
-                    // Use 'docker.image().inside' for Linux containers
-                    docker.image("my-app:8").inside {
-                        // Use 'sh' for Linux commands
-                        sh 'echo "Testing container..."'
-                        sh 'curl -sSf http://localhost:80'
-                    }
-                }
-            }
-        }
-
-        stage('Push to Docker Hub') {
-            steps {
-                script {
-                    docker.withRegistry('https://registry.hub.docker.com', 'docker-hub-credentials') {
-                        docker.image("my-app:8").push()
-                    }
-                }
-            }
-        }
+  stages {
+    stage('Checkout') {
+      steps {
+        git branch: 'main', url: 'https://github.com/your-username/your-repo.git'
+      }
     }
+
+    stage('Build Docker Image') {
+      steps {
+        script {
+          dockerImage = docker.build("your-dockerhub-username/your-app:${env.BUILD_ID}")
+        }
+      }
+    }
+
+    stage('Test') {
+      steps {
+        sh 'docker run your-dockerhub-username/your-app:${env.BUILD_ID} npm test'
+      }
+    }
+
+    stage('Push to Docker Hub') {
+      steps {
+        script {
+          docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-creds') {
+            dockerImage.push()
+          }
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      sh 'docker rmi your-dockerhub-username/your-app:${env.BUILD_ID}'
+    }
+  }
 }
